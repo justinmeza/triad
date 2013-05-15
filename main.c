@@ -5,23 +5,7 @@
 
 #define RPC_PORT 12345
 #define COM_PORT 12346
-
-typedef enum msg_type {
-	MSG_QUIT = 1,
-	MSG_QUIT_ACK,
-	MSG_GET_STATUS,
-	MSG_GET_STATUS_ACK,
-} msg_type_t;
-
-typedef struct msg {
-	msg_type_t type;
-	int data;
-} msg_t;
-
-typedef struct node {
-	int status;
-	int id;
-} node_t;
+#define KEYSPACE 32
 
 int strtoid(const char *str)
 {
@@ -42,6 +26,48 @@ char *idtostr(int id)
 	return ret;
 }
 
+typedef enum msg_type {
+	MSG_QUIT = 1,
+	MSG_QUIT_ACK,
+	MSG_GET_STATUS,
+	MSG_GET_STATUS_ACK,
+} msg_type_t;
+
+typedef struct msg {
+	msg_type_t type;
+	unsigned int data;
+} msg_t;
+
+typedef struct finger {
+	unsigned int start;
+	unsigned int end;
+	unsigned int successor_id;
+} finger_t;
+
+typedef struct node {
+	int status;
+	unsigned int id;
+	finger_t finger_table[KEYSPACE];
+} node_t;
+
+void init_finger_table(node_t *n)
+{
+	int f;
+	for (f = 0; f < KEYSPACE; f++) {
+		n->finger_table[f].start = (n->id + (1 << f));
+		n->finger_table[f].end = (n->id + (1 << (f + 1)));
+	}
+}
+
+void print_node(node_t *n)
+{
+	int f;
+	printf("id: %u (%s)\n", n->id, idtostr(n->id));
+	for (f = 0; f < KEYSPACE; f++) {
+		printf("finger %2d [ %10u / %s, %10u / %s )\n", f, n->finger_table[f].start, idtostr(n->finger_table[f].start), n->finger_table[f].end, idtostr(n->finger_table[f].end));
+	}
+}
+
 void rpc_get_status(node_t *node, msg_t *msg)
 {
 	msg->type = MSG_GET_STATUS_ACK;
@@ -50,12 +76,13 @@ void rpc_get_status(node_t *node, msg_t *msg)
 
 int main(int argc, char **argv)
 {
-	/* set up node */
-	node_t n;
-	n.status = 0;
-
 	char *ip = inet_lookup("localhost");
 	printf("IP is: %s\n", ip);
+
+	/* set up node */
+	node_t n;
+	n.id = strtoid(ip);
+	n.status = 0;
 
 	/* RPC thread */
 	int id = fork();
@@ -145,6 +172,9 @@ int main(int argc, char **argv)
 	*/
 
 	printf("done!\n"), fflush(stdout);
+
+	init_finger_table(&n);
+	print_node(&n);
 
 	return 0;
 }
