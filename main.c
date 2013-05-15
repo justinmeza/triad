@@ -10,17 +10,37 @@ void data_delete_rpc(void *DATA) { }
 
 typedef struct msg {
 	char type[32];
-	char data[32];
+	int data;
 } msg_t;
 
 typedef struct node {
 	int status;
+	int id;
 } node_t;
+
+int strtoid(const char *str)
+{
+	int o1, o2, o3, o4;
+	sscanf(str, "%u.%u.%u.%u", &o1, &o2, &o3, &o4);
+	return (o1 << 24) + (o2 << 16) + (o3 << 8) + o4;
+}
+
+char *idtostr(int id)
+{
+	unsigned char o[4];
+	o[0] = id & 0xff;
+	o[1] = (id >> 8) & 0xff;
+	o[2] = (id >> 16) & 0xff;
+	o[3] = (id >> 24) & 0xff;
+	char *ret = malloc(sizeof(char) * ((3 * 4) + 4 + 1));  // 4 octets + 4 dots + 1 null char
+	sprintf(ret, "%u.%u.%u.%u\0", o[3], o[2], o[1], o[0]);
+	return ret;
+}
 
 void rpc_get_status(node_t *node, msg_t *msg)
 {
-	printf("STATUS = \n"), fflush(stdout);
 	strcpy(msg->type, "RPC_GET_STATUS_ACK");
+	msg->data = node->status;
 }
 
 int main(int argc, char **argv)
@@ -68,6 +88,7 @@ int main(int argc, char **argv)
 	char *line = NULL;
 	while (line = readline("triad> ")) {
 		inet_host_t local, remote;
+		/* quit */
 		if (!strcmp(line, "quit")) {
 			inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
 			inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
@@ -77,10 +98,11 @@ int main(int argc, char **argv)
 			msg_t ack;
 			inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
 			if (!strcmp(ack.type, "RPC_QUIT_ACK"))
-				printf("received RPC_QUIT_ACK\n"), fflush(stdout);
+				printf("received (RPC_QUIT_ACK)\n"), fflush(stdout);
 			inet_close(&local);
 			break;
 		}
+		/* status */
 		else if (!strcmp(line, "status")) {
 			inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
 			inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
@@ -89,8 +111,10 @@ int main(int argc, char **argv)
 			inet_send(&local, &remote, &m, sizeof(msg_t));
 			msg_t ack;
 			inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
-			if (!strcmp(ack.type, "RPC_GET_STATUS_ACK"))
-				printf("received RPC_GET_STATUS_ACK\n"), fflush(stdout);
+			if (!strcmp(ack.type, "RPC_GET_STATUS_ACK")) {
+				printf("received (RPC_GET_STATUS_ACK)\n"), fflush(stdout);
+				printf("STATUS = %d\n", ack.data), fflush(stdout);
+			}
 			inet_close(&local);
 		}
 	}
@@ -98,7 +122,17 @@ int main(int argc, char **argv)
 	printf("waiting for child thread...\n"), fflush(stdout);
 	wait();
 
-	printf("cleaning up...\n"), fflush(stdout);
+	/*
+	printf("id: %u = str: %s\n", 0, idtostr(0));
+	printf("id: %u = str: %s\n", 12345678, idtostr(12345678));
+	printf("id: %u = str: %s\n", 2130706433, idtostr(2130706433));
+	printf("id: %u = str: %s\n", 4294967295u, idtostr(4294967295u));
+	printf("str: %s = id: %u\n", "0.0.0.0", strtoid("0.0.0.0"));
+	printf("str: %s = id: %u\n", "127.0.0.1", strtoid("127.0.0.1"));
+	printf("str: %s = id: %u\n", "255.255.255.255", strtoid("255.255.255.255"));
+	*/
+
+	printf("done!\n"), fflush(stdout);
 
 	return 0;
 }
