@@ -6,10 +6,15 @@
 #define RPC_PORT 12345
 #define COM_PORT 12346
 
-void data_delete_rpc(void *DATA) { }
+typedef enum msg_type {
+	MSG_QUIT = 1,
+	MSG_QUIT_ACK,
+	MSG_GET_STATUS,
+	MSG_GET_STATUS_ACK,
+} msg_type_t;
 
 typedef struct msg {
-	char type[32];
+	msg_type_t type;
 	int data;
 } msg_t;
 
@@ -39,7 +44,7 @@ char *idtostr(int id)
 
 void rpc_get_status(node_t *node, msg_t *msg)
 {
-	strcpy(msg->type, "RPC_GET_STATUS_ACK");
+	msg->type = MSG_GET_STATUS_ACK;
 	msg->data = node->status;
 }
 
@@ -63,19 +68,24 @@ int main(int argc, char **argv)
 			printf("accepted connection\n"), fflush(stdout);
 			msg_t m;
 			if (inet_receive(&remote, &local, &m, sizeof(msg_t), -1) == sizeof(msg_t)) {
-				printf("received message (%s)\n", m.type), fflush(stdout);
-				if (!strcmp(m.type, "RPC_QUIT")) {
-					msg_t ack = { "RPC_QUIT_ACK" };
-					printf("quitting...\n"), fflush(stdout);
-					inet_send(&local, &remote, &ack, sizeof(msg_t));
-					inet_close(&local);
-					inet_close(&remote);
-					return 0;
-				}
-				else if (!strcmp(m.type, "RPC_GET_STATUS")) {
-					msg_t m;
-					rpc_get_status(&n, &m);
-					inet_send(&local, &remote, &m, sizeof(msg_t));
+				printf("received message (%d)\n", m.type), fflush(stdout);
+				msg_t ack;
+				switch (m.type) {
+					case MSG_QUIT:
+						{
+							ack.type = MSG_QUIT_ACK;
+							printf("quitting...\n"), fflush(stdout);
+							inet_send(&local, &remote, &ack, sizeof(msg_t));
+							inet_close(&local);
+							inet_close(&remote);
+							return 0;
+						}
+					case MSG_GET_STATUS:
+						{
+							rpc_get_status(&n, &ack);
+							inet_send(&local, &remote, &ack, sizeof(msg_t));
+							break;
+						}
 				}
 			}
 			inet_close(&local);
@@ -93,11 +103,12 @@ int main(int argc, char **argv)
 			inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
 			inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
 			inet_connect(&local, &remote);
-			msg_t m = { "RPC_QUIT" };
+			msg_t m;
+			m.type = MSG_QUIT;
 			inet_send(&local, &remote, &m, sizeof(msg_t));
 			msg_t ack;
 			inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
-			if (!strcmp(ack.type, "RPC_QUIT_ACK"))
+			if (ack.type == MSG_QUIT_ACK)
 				printf("received (RPC_QUIT_ACK)\n"), fflush(stdout);
 			inet_close(&local);
 			break;
@@ -107,11 +118,12 @@ int main(int argc, char **argv)
 			inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
 			inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
 			inet_connect(&local, &remote);
-			msg_t m = { "RPC_GET_STATUS" };
+			msg_t m;
+			m.type = MSG_GET_STATUS;
 			inet_send(&local, &remote, &m, sizeof(msg_t));
 			msg_t ack;
 			inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
-			if (!strcmp(ack.type, "RPC_GET_STATUS_ACK")) {
+			if (ack.type == MSG_GET_STATUS_ACK) {
 				printf("received (RPC_GET_STATUS_ACK)\n"), fflush(stdout);
 				printf("STATUS = %d\n", ack.data), fflush(stdout);
 			}
