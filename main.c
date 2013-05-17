@@ -7,6 +7,55 @@
 #define COM_PORT 12346
 #define KEYSPACE 32
 
+/**
+ * Chord structures
+ */
+
+typedef struct finger {
+	unsigned int start;
+	unsigned int end;
+	unsigned int successor;
+} finger_t;
+
+typedef struct node {
+	int status;
+	unsigned int id;
+	unsigned int predecessor;
+	unsigned int successor;
+	finger_t finger_table[KEYSPACE];
+} node_t;
+
+
+/**
+ * RPC stuff
+ */
+
+typedef enum msg_type {
+	MSG_QUIT = 1,
+	MSG_QUIT_ACK,
+	MSG_GET_STATUS,
+	MSG_GET_STATUS_ACK,
+	MSG_GET_SUCCESSOR,
+	MSG_GET_SUCCESSOR_ACK,
+	MSG_GET_PREDECESSOR,
+	MSG_GET_PREDECESSOR_ACK,
+	MSG_GET_CLOSEST_PRECEDING_FINGER,
+	MSG_GET_CLOSEST_PRECEDING_FINGER_ACK,
+} msg_type_t;
+
+typedef struct msg {
+	msg_type_t type;
+	unsigned int data;
+} msg_t;
+
+/* forward declarations */
+unsigned int get_successor(node_t *, unsigned int);
+unsigned int get_closest_preceding_finger(node_t *, unsigned int, unsigned int);
+
+/**
+ * helper functions for converting between IP addresses and IDs
+ */
+
 int strtoid(const char *str)
 {
 	int o1, o2, o3, o4;
@@ -26,29 +75,79 @@ char *idtostr(int id)
 	return ret;
 }
 
-typedef enum msg_type {
-	MSG_QUIT = 1,
-	MSG_QUIT_ACK,
-	MSG_GET_STATUS,
-	MSG_GET_STATUS_ACK,
-} msg_type_t;
 
-typedef struct msg {
-	msg_type_t type;
-	unsigned int data;
-} msg_t;
+/**
+ * check if a value is within a range with circular wraparound
+ */
 
-typedef struct finger {
-	unsigned int start;
-	unsigned int end;
-	unsigned int successor_id;
-} finger_t;
+int in_range_ex_ex_circular(unsigned int a, unsigned int b, unsigned int c)
+{
+	if (a < b)
+		return ((c > a) && (c < b));
+	return ((c > a) || (c < b));
+}
 
-typedef struct node {
-	int status;
-	unsigned int id;
-	finger_t finger_table[KEYSPACE];
-} node_t;
+int in_range_in_in_circular(unsigned int a, unsigned int b, unsigned int c)
+{
+	if ((c == a) || (c == b))
+		return 1;
+	if (a < b)
+		return ((c >= a) && (c <= b));
+	return ((c >= a) || (c <= b));
+}
+
+int in_range_in_ex_circular(unsigned int a, unsigned int b, unsigned int c)
+{
+	if (c == a)
+		return 1;
+	if (a < b)
+		return ((c >= a) && (c < b));
+	return ((c >= a) || (c < b));
+}
+
+int in_range_ex_in_circular(unsigned int a, unsigned int b, unsigned int c)
+{
+	if (c == b)
+		return 1;
+	if (a < b)
+		return ((c > a) && (c <= b));
+	return ((c > a) || (c <= b));
+}
+
+
+/**
+ * Chord functions and helper functions
+ */
+
+unsigned int closest_preceding_finger(node_t *n, unsigned int id)
+{
+	int i;
+	for (i = (KEYSPACE - 1); i >= 0; i--) {
+		unsigned int check = n->finger_table[i].successor;
+		if (in_range_ex_ex_circular(n->id, id, check))
+			return check;
+	}
+	return n->id;
+}
+
+unsigned int find_predecessor(node_t *n, unsigned int id)
+{
+	if (in_range_in_ex_circular(n->id, n->successor, id))
+		return n->id;
+	unsigned int i = n->id;
+	while (!in_range_ex_in_circular(i, get_successor(n, i), id))
+		i = get_closest_preceding_finger(n, i, id);
+	return i;
+}
+
+unsigned int find_successor(node_t *n, unsigned int id)
+{
+	// if this node is the successor
+	if (in_range_ex_in_circular(n->predecessor, n->id, id))
+		return n->id;
+	unsigned int p = find_predecessor(n, id);
+	return get_successor(n, p);
+}
 
 void init_finger_table(node_t *n)
 {
@@ -68,10 +167,62 @@ void print_node(node_t *n)
 	}
 }
 
-void rpc_get_status(node_t *node, msg_t *msg)
+
+/**
+ * RPC wrapper functions
+ */
+
+unsigned int get_successor(node_t *n, unsigned int id)
 {
-	msg->type = MSG_GET_STATUS_ACK;
-	msg->data = node->status;
+	unsigned int ret;
+	if (id == n->id)
+		return n->successor;
+	char *ip = idtostr(id);
+	/* RPC */
+	inet_host_t local, remote;
+	inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
+	inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
+	inet_connect(&local, &remote);
+	msg_t m;
+	m.type = MSG_GET_STATUS;
+	inet_send(&local, &remote, &m, sizeof(msg_t));
+	msg_t ack;
+	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
+	if (ack.type == MSG_GET_STATUS_ACK) {
+		printf("received (RPC_GET_STATUS_ACK)\n"), fflush(stdout);
+		printf("STATUS = %d\n", ack.data), fflush(stdout);
+		ret = ack.data;
+	}
+	inet_close(&local);
+	free(ip);
+	return ret;
+}
+
+unsigned int get_closest_preceding_finger(node_t *n, unsigned int i, unsigned int id)
+{
+	unsigned int ret;
+	if (i == n->id)
+		return closest_preceding_finger(n, id);
+	char *ip = idtostr(i);
+	/* RPC */
+	inet_host_t local, remote;
+	inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
+	inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
+	inet_connect(&local, &remote);
+	msg_t m;
+	m.type = MSG_GET_CLOSEST_PRECEDING_FINGER;
+	m.data = id;
+	inet_send(&local, &remote, &m, sizeof(msg_t));
+	msg_t ack;
+	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
+	if (ack.type == MSG_GET_CLOSEST_PRECEDING_FINGER_ACK) {
+		printf("received (RPC_GET_CLOSEST_PRECEDING_FINGER_ACK)\n"), fflush(stdout);
+		printf("CLOSEST_PRECEDING_FINGER = %d\n", ack.data), fflush(stdout);
+		ret = ack.data;
+	}
+	inet_close(&local);
+	free(ip);
+	return ret;
 }
 
 int main(int argc, char **argv)
@@ -82,6 +233,8 @@ int main(int argc, char **argv)
 	/* set up node */
 	node_t n;
 	n.id = strtoid(ip);
+	n.successor = n.id;
+	n.predecessor = n.id;
 	n.status = 0;
 
 	/* RPC thread */
@@ -109,7 +262,29 @@ int main(int argc, char **argv)
 						}
 					case MSG_GET_STATUS:
 						{
-							rpc_get_status(&n, &ack);
+							ack.type = MSG_GET_STATUS_ACK;
+							ack.data = n.status;
+							inet_send(&local, &remote, &ack, sizeof(msg_t));
+							break;
+						}
+					case MSG_GET_SUCCESSOR:
+						{
+							ack.type = MSG_GET_SUCCESSOR_ACK;
+							ack.data = n.successor;
+							inet_send(&local, &remote, &ack, sizeof(msg_t));
+							break;
+						}
+					case MSG_GET_PREDECESSOR:
+						{
+							ack.type = MSG_GET_PREDECESSOR_ACK;
+							ack.data = n.predecessor;
+							inet_send(&local, &remote, &ack, sizeof(msg_t));
+							break;
+						}
+					case MSG_GET_CLOSEST_PRECEDING_FINGER:
+						{
+							ack.type = MSG_GET_CLOSEST_PRECEDING_FINGER_ACK;
+							ack.data = closest_preceding_finger(&n, m.data);
 							inet_send(&local, &remote, &ack, sizeof(msg_t));
 							break;
 						}
@@ -124,9 +299,10 @@ int main(int argc, char **argv)
 	/* CLI thread */
 	char *line = NULL;
 	while (line = readline("triad> ")) {
-		inet_host_t local, remote;
 		/* quit */
 		if (!strcmp(line, "quit")) {
+			/* RPC */
+			inet_host_t local, remote;
 			inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
 			inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
 			inet_connect(&local, &remote);
@@ -142,6 +318,8 @@ int main(int argc, char **argv)
 		}
 		/* status */
 		else if (!strcmp(line, "status")) {
+			/* RPC */
+			inet_host_t local, remote;
 			inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
 			inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
 			inet_connect(&local, &remote);
@@ -153,6 +331,42 @@ int main(int argc, char **argv)
 			if (ack.type == MSG_GET_STATUS_ACK) {
 				printf("received (RPC_GET_STATUS_ACK)\n"), fflush(stdout);
 				printf("STATUS = %d\n", ack.data), fflush(stdout);
+			}
+			inet_close(&local);
+		}
+		/* successor */
+		else if (!strcmp(line, "successor")) {
+			/* RPC */
+			inet_host_t local, remote;
+			inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
+			inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
+			inet_connect(&local, &remote);
+			msg_t m;
+			m.type = MSG_GET_SUCCESSOR;
+			inet_send(&local, &remote, &m, sizeof(msg_t));
+			msg_t ack;
+			inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
+			if (ack.type == MSG_GET_SUCCESSOR_ACK) {
+				printf("received (RPC_GET_SUCCESSOR_ACK)\n"), fflush(stdout);
+				printf("SUCCESSOR = %d\n", ack.data), fflush(stdout);
+			}
+			inet_close(&local);
+		}
+		/* predecessor */
+		else if (!strcmp(line, "predecessor")) {
+			/* RPC */
+			inet_host_t local, remote;
+			inet_open(&local, IN_PROT_TCP, IN_ADDR_ANY, COM_PORT);
+			inet_setup(&remote, IN_PROT_TCP, ip, RPC_PORT);
+			inet_connect(&local, &remote);
+			msg_t m;
+			m.type = MSG_GET_PREDECESSOR;
+			inet_send(&local, &remote, &m, sizeof(msg_t));
+			msg_t ack;
+			inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
+			if (ack.type == MSG_GET_PREDECESSOR_ACK) {
+				printf("received (RPC_GET_PREDECESSOR_ACK)\n"), fflush(stdout);
+				printf("PREDECESSOR = %d\n", ack.data), fflush(stdout);
 			}
 			inet_close(&local);
 		}
