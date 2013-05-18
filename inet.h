@@ -119,10 +119,6 @@ inet_setup(inet_host_t *host,
 	host->addr.sin_addr.s_addr =
 		(addr == IN_ADDR_ANY ? IN_ADDR_ANY : inet_addr(addr));
 	memset(host->addr.sin_zero, 0, sizeof(host->addr.sin_zero));
-
-	// don't wait for kernel to release socket resources
-	int yes = 1;
-	setsockopt(host->fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
 }
 
 // inet_open (TCP / UDP)
