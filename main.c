@@ -199,7 +199,6 @@ void update_finger_table(node_t *n, int f, unsigned int id)
 {
 	if (in_range_ex_ex_circular(n->id, n->finger_table[f].successor, id)) {
 		n->finger_table[f].successor = id;
-		printf("f = %d, id = %u\n", f, id), fflush(stdout);
 		if (f == 0)
 			n->successor = id;
 		unsigned int p = n->predecessor;
@@ -663,7 +662,7 @@ int main(int argc, char **argv)
 	}
 
 	printf("waiting for child thread...\n"), fflush(stdout);
-	wait(0);
+	pthread_join(rpc_thread, NULL);
 
 	/*
 	printf("id: %u = str: %s\n", 0, idtostr(0));
