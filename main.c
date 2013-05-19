@@ -57,8 +57,10 @@ typedef enum msg_type {
 	MSG_FIND_SUCCESSOR_ACK,
 	MSG_FIND_PREDECESSOR,
 	MSG_FIND_PREDECESSOR_ACK,
-	MSG_UPDATE_FINGER_TABLE,
-	MSG_UPDATE_FINGER_TABLE_ACK,
+	MSG_UPDATE_FINGER_TABLE_JOIN,
+	MSG_UPDATE_FINGER_TABLE_JOIN_ACK,
+	MSG_UPDATE_FINGER_TABLE_LEAVE,
+	MSG_UPDATE_FINGER_TABLE_LEAVE_ACK,
 } msg_type_t;
 
 typedef struct msg {
@@ -75,7 +77,9 @@ unsigned int rpc_get_predecessor(unsigned int);
 int rpc_set_predecessor(unsigned int, unsigned int);
 unsigned int rpc_get_closest_preceding_finger(unsigned int, unsigned int);
 unsigned int rpc_find_successor(unsigned int, unsigned int);
-int rpc_update_finger_table(unsigned int, unsigned int, unsigned int);
+unsigned int rpc_find_predecessor(unsigned int, unsigned int);
+int rpc_update_finger_table_join(unsigned int, unsigned int, unsigned int);
+int rpc_update_finger_table_leave(unsigned int, unsigned int, unsigned int);
 
 /**
  * helper functions for converting between IP addresses and IDs
@@ -171,7 +175,7 @@ unsigned int find_successor(node_t *n, unsigned int id)
 	if (in_range_ex_in_circular(n->predecessor, n->id, id))
 		return n->id;
 	unsigned int p = find_predecessor(n, id);
-	return rpc_get_successor(p);
+	return ((p == n->id) ? n->successor : rpc_get_successor(p));
 }
 
 void init_finger_table(node_t *n, unsigned int remote)
@@ -195,7 +199,7 @@ void init_finger_table(node_t *n, unsigned int remote)
 	}
 }
 
-void update_finger_table(node_t *n, int f, unsigned int id)
+void update_finger_table_join(node_t *n, int f, unsigned int id)
 {
 	if (in_range_ex_ex_circular(n->id, n->finger_table[f].successor, id)) {
 		n->finger_table[f].successor = id;
@@ -203,13 +207,24 @@ void update_finger_table(node_t *n, int f, unsigned int id)
 			n->successor = id;
 		unsigned int p = n->predecessor;
 		if (p == n->id)
-			update_finger_table(n, f, id);
+			update_finger_table_join(n, f, id);
 		else
-			rpc_update_finger_table(p, f, id);
+			rpc_update_finger_table_join(p, f, id);
 	}
 }
 
-void update_others(node_t *n)
+void update_finger_table_leave(node_t *n, int f, unsigned int id)
+{
+	if (n->finger_table[f].successor == id)
+		n->finger_table[f].successor = rpc_get_successor(id);
+	unsigned int p = n->predecessor;
+	if (p == n->id)
+		update_finger_table_leave(n, f, id);
+	else
+		rpc_update_finger_table_leave(p, f, id);
+}
+
+void update_others_join(node_t *n)
 {
 	int f;
 	for (f = 0; f < KEYSPACE; f++) {
@@ -219,7 +234,21 @@ void update_others(node_t *n)
 		status_t status = ((temp == n->id) ? n->status : rpc_get_status(temp));
 		if (status == ST_CONNECTED)
 			p = temp;
-		rpc_update_finger_table(p, f, n->id);
+		rpc_update_finger_table_join(p, f, n->id);
+	}
+}
+
+void update_others_leave(node_t *n)
+{
+	int f;
+	for (f = 0; f < KEYSPACE; f++) {
+		unsigned int temp = n->id - (1 << f);
+		unsigned int p = find_predecessor(n, (n->id - (1 << f)));
+		printf("finger %d (checking status of %10u / %15s)\n", f, temp, idtostr(temp)), fflush(stdout);
+		status_t status = ((temp == n->id) ? n->status : rpc_get_status(temp));
+		if (status == ST_CONNECTED)
+			p = temp;
+		rpc_update_finger_table_leave(p, f, n->id);
 	}
 }
 
@@ -449,7 +478,7 @@ unsigned int rpc_find_successor(unsigned int node, unsigned int id)
 	return ret;
 }
 
-int rpc_update_finger_table(unsigned int p, unsigned int f, unsigned int id)
+int rpc_update_finger_table_join(unsigned int p, unsigned int f, unsigned int id)
 {
 	unsigned int ret = 0;
 	char *ip = idtostr(p);
@@ -458,14 +487,38 @@ int rpc_update_finger_table(unsigned int p, unsigned int f, unsigned int id)
 	inet_open(&local, IN_PROT_UDP, IN_ADDR_ANY, COM_PORT);
 	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
 	msg_t m;
-	m.type = MSG_UPDATE_FINGER_TABLE;
+	m.type = MSG_UPDATE_FINGER_TABLE_JOIN;
 	m.data = f;
 	m.data2 = id;
 	inet_send(&local, &remote, &m, sizeof(msg_t));
 	msg_t ack;
 	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
-	if (ack.type == MSG_UPDATE_FINGER_TABLE_ACK) {
-		printf("received (MSG_UPDATE_FINGER_TABLE_ACK)\n"), fflush(stdout);
+	if (ack.type == MSG_UPDATE_FINGER_TABLE_JOIN_ACK) {
+		printf("received (MSG_UPDATE_FINGER_TABLE_JOIN_ACK)\n"), fflush(stdout);
+		ret = 1;
+	}
+	inet_close(&local);
+	free(ip);
+	return ret;
+}
+
+int rpc_update_finger_table_leave(unsigned int p, unsigned int f, unsigned int id)
+{
+	unsigned int ret = 0;
+	char *ip = idtostr(p);
+	/* RPC */
+	inet_host_t local, remote;
+	inet_open(&local, IN_PROT_UDP, IN_ADDR_ANY, COM_PORT);
+	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
+	msg_t m;
+	m.type = MSG_UPDATE_FINGER_TABLE_LEAVE;
+	m.data = f;
+	m.data2 = id;
+	inet_send(&local, &remote, &m, sizeof(msg_t));
+	msg_t ack;
+	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
+	if (ack.type == MSG_UPDATE_FINGER_TABLE_LEAVE_ACK) {
+		printf("received (MSG_UPDATE_FINGER_TABLE_LEAVE_ACK)\n"), fflush(stdout);
 		ret = 1;
 	}
 	inet_close(&local);
@@ -566,11 +619,19 @@ void *rpc_handler(void *data)
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
 					}
-				case MSG_UPDATE_FINGER_TABLE:
-					printf("received (MSG_UPDATE_FINGER_TABLE)\n"), fflush(stdout);
+				case MSG_UPDATE_FINGER_TABLE_JOIN:
+					printf("received (MSG_UPDATE_FINGER_TABLE_JOIN)\n"), fflush(stdout);
 					{
-						update_finger_table(n, m.data, m.data2);
-						ack.type = MSG_UPDATE_FINGER_TABLE_ACK;
+						update_finger_table_join(n, m.data, m.data2);
+						ack.type = MSG_UPDATE_FINGER_TABLE_JOIN_ACK;
+						inet_send(&local, &remote, &ack, sizeof(msg_t));
+						break;
+					}
+				case MSG_UPDATE_FINGER_TABLE_LEAVE:
+					printf("received (MSG_UPDATE_FINGER_TABLE_LEAVE)\n"), fflush(stdout);
+					{
+						update_finger_table_leave(n, m.data, m.data2);
+						ack.type = MSG_UPDATE_FINGER_TABLE_LEAVE_ACK;
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
 					}
@@ -633,7 +694,7 @@ int main(int argc, char **argv)
 			unsigned int id = strtoid(arg1);
 			if (rpc_get_status(id) == ST_CONNECTED) {
 				init_finger_table(&n, id);
-				update_others(&n);
+				update_others_join(&n);
 				rpc_set_status(n.id, ST_CONNECTED);
 				printf("joined an existing ring!\n");
 			}
@@ -649,6 +710,13 @@ int main(int argc, char **argv)
 				rpc_set_status(n.id, ST_CONNECTED);
 				printf("started a new ring!\n");
 			}
+		}
+		/* lookup */
+		else if (!strcmp(command, "lookup")) {
+			unsigned int id;
+			sscanf(arg1, "%u", &id);
+			unsigned int node = find_successor(&n, id);
+			printf("%u => %10u / %15s\n", id, node, idtostr(node));
 		}
 		/* print */
 		else if (!strcmp(command, "print")) {
