@@ -1,5 +1,10 @@
-all:
-	gcc -g -o triad *.c -lncurses -lreadline -lpthread
+all: cli
+
+cli: inet.c triad.c main.c
+	gcc -Wall -lncurses -lreadline -lpthread -o cli inet.c triad.c main.c
+
+clean:
+	@rm cli
 
 TAGS:
 	ctags *.{c,h}
