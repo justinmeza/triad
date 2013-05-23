@@ -581,3 +581,94 @@ void *rpc_handler(void *data)
 		inet_close(&local);
 	}
 }
+
+/**
+ * triad functions
+ */
+
+node_t *triad_init(const char *ip)
+{
+	/* set up node */
+	node_t *n = malloc(sizeof(node_t));
+	n->id = strtoid(ip);
+	n->successor = n->id;
+	n->predecessor = n->id;
+	int f;
+	for (f = 0; f < KEYSPACE; f++) {
+		n->finger_table[f].start = (n->id + (1 << f));
+		n->finger_table[f].end = (n->id + (1 << (f + 1)));
+		n->finger_table[f].successor = n->id;
+	}
+	n->status = ST_DISCONNECTED;
+
+	/* start RPC thread */
+	pthread_create(&(n->rpc_thread), NULL, rpc_handler, n);
+
+	return n;
+}
+
+int triad_deinit(node_t *n)
+{
+	/* RPC */
+	inet_host_t local, remote;
+	inet_open(&local, IN_PROT_UDP, IN_ADDR_ANY, COM_PORT);
+	char *ip = idtostr(n->id);
+	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
+	msg_t m;
+	m.type = MSG_QUIT;
+	inet_send(&local, &remote, &m, sizeof(msg_t));
+	msg_t ack;
+	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
+	if (ack.type == MSG_QUIT_ACK)
+		printf("received (MSG_QUIT_ACK)\n"), fflush(stdout);
+	inet_close(&local);
+
+	printf("waiting for child thread...\n"), fflush(stdout);
+	pthread_join(n->rpc_thread, NULL);
+
+	return 1;
+}
+
+int triad_join(node_t *n, const char *ip)
+{
+	printf("attempting to join ring at %s...\n", ip);
+	unsigned int id = strtoid(ip);
+	if (rpc_get_status(id) == ST_CONNECTED) {
+		init_finger_table(n, id);
+		update_others_join(n);
+		rpc_set_status(n->id, ST_CONNECTED);
+		printf("joined an existing ring!\n");
+	}
+	else {
+		int f;
+		for (f = 0; f < KEYSPACE; f++) {
+			n->finger_table[f].start = (n->id + (1 << f));
+			n->finger_table[f].end = (n->id + (1 << (f + 1)));
+			n->finger_table[f].successor = n->id;
+		}
+		n->predecessor = n->id;
+		n->successor = n->id;
+		rpc_set_status(n->id, ST_CONNECTED);
+		printf("started a new ring!\n");
+	}
+}
+
+int triad_leave(node_t *n)
+{
+	deinit_finger_table(n);
+	update_others_leave(n);
+	int f;
+	for (f = 0; f < KEYSPACE; f++) {
+		n->finger_table[f].start = (n->id + (1 << f));
+		n->finger_table[f].end = (n->id + (1 << (f + 1)));
+		n->finger_table[f].successor = n->id;
+		n->successor = n->id;
+		n->predecessor = n->id;
+	}
+}
+
+char *triad_lookup(node_t *n, unsigned int id)
+{
+	unsigned int node = find_successor(n, id);
+	return idtostr(node);
+}

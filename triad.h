@@ -29,6 +29,7 @@ typedef struct node {
 	unsigned int predecessor;
 	unsigned int successor;
 	finger_t finger_table[KEYSPACE];
+	pthread_t rpc_thread;
 } node_t;
 
 
@@ -102,5 +103,11 @@ int rpc_update_finger_table_join(unsigned int, unsigned int, unsigned int);
 int rpc_update_finger_table_leave(unsigned int, unsigned int, unsigned int);
 
 void *rpc_handler(void *);
+
+node_t *triad_init(const char *);
+int triad_deinit(node_t *);
+int triad_join(node_t *, const char *);
+int triad_leave(node_t *);
+char *triad_lookup(node_t *, unsigned int);
 
 #endif /* __TRIAD_H__ */
