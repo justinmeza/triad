@@ -66,8 +66,7 @@ typedef enum msg_type {
 
 typedef struct msg {
 	msg_type_t type;
-	unsigned int data;
-	unsigned int data2;  // TODO:  make this not a hack
+	unsigned int data[2];
 } msg_t;
 
 

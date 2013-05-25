@@ -214,8 +214,8 @@ unsigned int rpc_get_status(unsigned int id)
 	inet_receive(&remote, &local, &ack, sizeof(msg_t), 1);
 	if (ack.type == MSG_GET_STATUS_ACK) {
 		printf("received (MSG_GET_STATUS_ACK)\n"), fflush(stdout);
-		printf("STATUS = %d\n", ack.data), fflush(stdout);
-		ret = ack.data;
+		printf("STATUS = %d\n", ack.data[0]), fflush(stdout);
+		ret = ack.data[0];
 	}
 	inet_close(&local);
 	free(ip);
@@ -232,7 +232,7 @@ int rpc_set_status(unsigned int id, status_t status)
 	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
 	msg_t m;
 	m.type = MSG_SET_STATUS;
-	m.data = status;
+	m.data[0] = status;
 	inet_send(&local, &remote, &m, sizeof(msg_t));
 	printf("sent (MSG_SET_STATUS:%s)\n", ip), fflush(stdout);
 	msg_t ack;
@@ -262,8 +262,8 @@ unsigned int rpc_get_successor(unsigned int id)
 	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
 	if (ack.type == MSG_GET_SUCCESSOR_ACK) {
 		printf("received (MSG_GET_SUCCESSOR_ACK)\n"), fflush(stdout);
-		printf("SUCCESSOR = %u\n", ack.data), fflush(stdout);
-		ret = ack.data;
+		printf("SUCCESSOR = %u\n", ack.data[0]), fflush(stdout);
+		ret = ack.data[0];
 	}
 	inet_close(&local);
 	free(ip);
@@ -280,7 +280,7 @@ int rpc_set_successor(unsigned int id, unsigned int successor)
 	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
 	msg_t m;
 	m.type = MSG_SET_SUCCESSOR;
-	m.data = successor;
+	m.data[0] = successor;
 	inet_send(&local, &remote, &m, sizeof(msg_t));
 	printf("sent (MSG_SET_SUCCESSOR:%s)\n", ip), fflush(stdout);
 	msg_t ack;
@@ -310,8 +310,8 @@ unsigned int rpc_get_predecessor(unsigned int id)
 	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
 	if (ack.type == MSG_GET_PREDECESSOR_ACK) {
 		printf("received (MSG_GET_PREDECESSOR_ACK)\n"), fflush(stdout);
-		printf("PREDECESSOR = %u\n", ack.data), fflush(stdout);
-		ret = ack.data;
+		printf("PREDECESSOR = %u\n", ack.data[0]), fflush(stdout);
+		ret = ack.data[0];
 	}
 	inet_close(&local);
 	free(ip);
@@ -328,7 +328,7 @@ int rpc_set_predecessor(unsigned int id, unsigned int predecessor)
 	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
 	msg_t m;
 	m.type = MSG_SET_PREDECESSOR;
-	m.data = predecessor;
+	m.data[0] = predecessor;
 	inet_send(&local, &remote, &m, sizeof(msg_t));
 	printf("sent (MSG_SET_PREDECESSOR:%s)\n", ip), fflush(stdout);
 	msg_t ack;
@@ -352,15 +352,15 @@ unsigned int rpc_get_closest_preceding_finger(unsigned int node, unsigned int id
 	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
 	msg_t m;
 	m.type = MSG_GET_CLOSEST_PRECEDING_FINGER;
-	m.data = id;
+	m.data[0] = id;
 	inet_send(&local, &remote, &m, sizeof(msg_t));
 	printf("sent (MSG_GET_CLOSEST_PRECEDING_FINGER:%s)\n", ip), fflush(stdout);
 	msg_t ack;
 	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
 	if (ack.type == MSG_GET_CLOSEST_PRECEDING_FINGER_ACK) {
 		printf("received (MSG_GET_CLOSEST_PRECEDING_FINGER_ACK)\n"), fflush(stdout);
-		printf("CLOSEST_PRECEDING_FINGER = %u\n", ack.data), fflush(stdout);
-		ret = ack.data;
+		printf("CLOSEST_PRECEDING_FINGER = %u\n", ack.data[0]), fflush(stdout);
+		ret = ack.data[0];
 	}
 	inet_close(&local);
 	free(ip);
@@ -377,15 +377,15 @@ unsigned int rpc_find_predecessor(unsigned int node, unsigned int id)
 	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
 	msg_t m;
 	m.type = MSG_FIND_PREDECESSOR;
-	m.data = id;
+	m.data[0] = id;
 	inet_send(&local, &remote, &m, sizeof(msg_t));
 	printf("sent (MSG_FIND_PREDECESSOR:%s)\n", ip), fflush(stdout);
 	msg_t ack;
 	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
 	if (ack.type == MSG_FIND_PREDECESSOR_ACK) {
 		printf("received (MSG_FIND_PREDECESSOR_ACK)\n"), fflush(stdout);
-		printf("PREDECESSOR(%u) = %u\n", id, ack.data), fflush(stdout);
-		ret = ack.data;
+		printf("PREDECESSOR(%u) = %u\n", id, ack.data[0]), fflush(stdout);
+		ret = ack.data[0];
 	}
 	inet_close(&local);
 	free(ip);
@@ -402,15 +402,15 @@ unsigned int rpc_find_successor(unsigned int node, unsigned int id)
 	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
 	msg_t m;
 	m.type = MSG_FIND_SUCCESSOR;
-	m.data = id;
+	m.data[0] = id;
 	inet_send(&local, &remote, &m, sizeof(msg_t));
 	printf("sent (MSG_FIND_SUCCESSOR:%s)\n", ip), fflush(stdout);
 	msg_t ack;
 	inet_receive(&remote, &local, &ack, sizeof(msg_t), -1);
 	if (ack.type == MSG_FIND_SUCCESSOR_ACK) {
 		printf("received (MSG_FIND_SUCCESSOR_ACK)\n"), fflush(stdout);
-		printf("SUCCESSOR(%u) = %u\n", id, ack.data), fflush(stdout);
-		ret = ack.data;
+		printf("SUCCESSOR(%u) = %u\n", id, ack.data[0]), fflush(stdout);
+		ret = ack.data[0];
 	}
 	inet_close(&local);
 	free(ip);
@@ -427,8 +427,8 @@ int rpc_update_finger_table_join(unsigned int p, unsigned int f, unsigned int id
 	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
 	msg_t m;
 	m.type = MSG_UPDATE_FINGER_TABLE_JOIN;
-	m.data = f;
-	m.data2 = id;
+	m.data[0] = f;
+	m.data[1] = id;
 	inet_send(&local, &remote, &m, sizeof(msg_t));
 	printf("sent (MSG_UPDATE_FINGER_TABLE_JOIN:%s)\n", ip), fflush(stdout);
 	msg_t ack;
@@ -452,8 +452,8 @@ int rpc_update_finger_table_leave(unsigned int p, unsigned int f, unsigned int i
 	inet_setup(&remote, IN_PROT_UDP, ip, RPC_PORT);
 	msg_t m;
 	m.type = MSG_UPDATE_FINGER_TABLE_LEAVE;
-	m.data = f;
-	m.data2 = id;
+	m.data[0] = f;
+	m.data[1] = id;
 	inet_send(&local, &remote, &m, sizeof(msg_t));
 	printf("sent (MSG_UPDATE_FINGER_TABLE_LEAVE:%s)\n", ip), fflush(stdout);
 	msg_t ack;
@@ -492,14 +492,14 @@ void *rpc_handler(void *data)
 					printf("received (MSG_GET_STATUS)\n"), fflush(stdout);
 					{
 						ack.type = MSG_GET_STATUS_ACK;
-						ack.data = n->status;
+						ack.data[0] = n->status;
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
 					}
 				case MSG_SET_STATUS:
 					printf("received (MSG_SET_STATUS)\n"), fflush(stdout);
 					{
-						n->status = m.data;
+						n->status = m.data[0];
 						ack.type = MSG_SET_STATUS_ACK;
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
@@ -508,14 +508,14 @@ void *rpc_handler(void *data)
 					printf("received (MSG_GET_SUCCESSOR)\n"), fflush(stdout);
 					{
 						ack.type = MSG_GET_SUCCESSOR_ACK;
-						ack.data = n->successor;
+						ack.data[0] = n->successor;
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
 					}
 				case MSG_SET_SUCCESSOR:
 					printf("received (MSG_SET_SUCCESSOR)\n"), fflush(stdout);
 					{
-						n->successor = m.data;
+						n->successor = m.data[0];
 						ack.type = MSG_SET_SUCCESSOR_ACK;
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
@@ -524,14 +524,14 @@ void *rpc_handler(void *data)
 					printf("received (MSG_GET_PREDECESSOR)\n"), fflush(stdout);
 					{
 						ack.type = MSG_GET_PREDECESSOR_ACK;
-						ack.data = n->predecessor;
+						ack.data[0] = n->predecessor;
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
 					}
 				case MSG_SET_PREDECESSOR:
 					printf("received (MSG_SET_PREDECESSOR)\n"), fflush(stdout);
 					{
-						n->predecessor = m.data;
+						n->predecessor = m.data[0];
 						ack.type = MSG_SET_PREDECESSOR_ACK;
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
@@ -540,7 +540,7 @@ void *rpc_handler(void *data)
 					printf("received (MSG_GET_CLOSEST_PRECEDING_FINGER)\n"), fflush(stdout);
 					{
 						ack.type = MSG_GET_CLOSEST_PRECEDING_FINGER_ACK;
-						ack.data = closest_preceding_finger(n, m.data);
+						ack.data[0] = closest_preceding_finger(n, m.data[0]);
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
 					}
@@ -548,7 +548,7 @@ void *rpc_handler(void *data)
 					printf("received (MSG_FIND_SUCCESSOR)\n"), fflush(stdout);
 					{
 						ack.type = MSG_FIND_SUCCESSOR_ACK;
-						ack.data = find_successor(n, m.data);
+						ack.data[0] = find_successor(n, m.data[0]);
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
 					}
@@ -556,14 +556,14 @@ void *rpc_handler(void *data)
 					printf("received (MSG_FIND_PREDECESSOR)\n"), fflush(stdout);
 					{
 						ack.type = MSG_FIND_PREDECESSOR_ACK;
-						ack.data = find_predecessor(n, m.data);
+						ack.data[0] = find_predecessor(n, m.data[0]);
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
 					}
 				case MSG_UPDATE_FINGER_TABLE_JOIN:
 					printf("received (MSG_UPDATE_FINGER_TABLE_JOIN)\n"), fflush(stdout);
 					{
-						update_finger_table_join(n, m.data, m.data2);
+						update_finger_table_join(n, m.data[0], m.data[1]);
 						ack.type = MSG_UPDATE_FINGER_TABLE_JOIN_ACK;
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
@@ -571,7 +571,7 @@ void *rpc_handler(void *data)
 				case MSG_UPDATE_FINGER_TABLE_LEAVE:
 					printf("received (MSG_UPDATE_FINGER_TABLE_LEAVE)\n"), fflush(stdout);
 					{
-						update_finger_table_leave(n, m.data, m.data2);
+						update_finger_table_leave(n, m.data[0], m.data[1]);
 						ack.type = MSG_UPDATE_FINGER_TABLE_LEAVE_ACK;
 						inet_send(&local, &remote, &ack, sizeof(msg_t));
 						break;
@@ -665,6 +665,7 @@ int triad_leave(node_t *n)
 		n->successor = n->id;
 		n->predecessor = n->id;
 	}
+	rpc_set_status(n->id, ST_DISCONNECTED);
 }
 
 char *triad_lookup(node_t *n, unsigned int id)

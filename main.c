@@ -33,19 +33,24 @@ int main(int argc, char **argv)
 
 		/* join */
 		else if (!strcmp(command, "join")) {
-			triad_join(n, arg1);
+			if (n->status == ST_DISCONNECTED)
+				triad_join(n, arg1);
+			else
+				printf("node is already connected to a ring!\n");
 		}
 
 		/* leave */
 		else if (!strcmp(command, "leave")) {
 			triad_leave(n);
 		}
+
 		/* lookup */
 		else if (!strcmp(command, "lookup")) {
 			unsigned int id;
 			sscanf(arg1, "%u", &id);
 			printf("%u => %15s\n", id, triad_lookup(n, id));
 		}
+
 		/* print */
 		else if (!strcmp(command, "print")) {
 			print_node(n);
